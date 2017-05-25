@@ -7,16 +7,16 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.SocketException;
+
 import java.util.List;
 
 import javax.swing.JOptionPane;
+import javax.swing.plaf.synth.SynthSeparatorUI;
 
 import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.WebClient;
+import com.gargoylesoftware.htmlunit.html.DomElement;
 import com.gargoylesoftware.htmlunit.html.HtmlButton;
-import com.gargoylesoftware.htmlunit.html.HtmlElement;
 import com.gargoylesoftware.htmlunit.html.HtmlForm;
 import com.gargoylesoftware.htmlunit.html.HtmlInput;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
@@ -103,24 +103,67 @@ public class ELMSParser {
 			month = date.substring(0, 2);			
 			day = date.substring(3, 5);			
 			year = date.substring(6, 10);
+			System.out.println("Month: " + month + ", Day: " + day + ", Year: " + year);
 		} catch(NumberFormatException e) {
-			e.printStackTrace();
+			e.printStackTrace();		
 		}
-		
-		// Navigating to agenda that starts with the date the user provided
-		final HtmlPage agenda;
-		try {
+
+		HtmlPage agenda;
+		try {				
+			
+			// Opening the agenda webpage at the date provided
 			agenda = webClient.getPage("https://myelms.umd.edu/calendar#view_name=agenda&view_start=" 
 					+ year + "-" + month + "-" + day);
 			System.out.println(agenda.getUrl());
-	
+			
+			// Navigating to where assignments are stored
+			DomElement temp = agenda.getElementById("content");
+			System.out.println(temp);
+			temp = temp.getLastElementChild().getPreviousElementSibling();
+			System.out.println(temp);
+			temp = temp.getFirstElementChild().getNextElementSibling();
+			System.out.println(temp);
+			// Waiting for the page to load (just in case)
+			while(temp.getChildElementCount() == 0) {
+				try {
+					Thread.sleep(5000);
+				} catch(InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			temp = temp.getFirstElementChild();
+			System.out.println(temp);
+			temp = temp.getFirstElementChild().getNextElementSibling();
+			System.out.println(temp);
+			DomElement eventList = temp.getFirstElementChild();
+			System.out.println(eventList);
+			DomElement curr = eventList.getFirstElementChild();
+			System.out.println("curr=" + curr);
+			if(curr == null) {
+				System.out.println("No assignments due on " + month + "/" + day + "/" + year);
+			}
+			while(curr != null) {
+				DomElement event = curr.getFirstElementChild();
+				DomElement dueDate = event.getFirstElementChild().getNextElementSibling();
+				System.out.println(dueDate.asText());
+				DomElement assignmentName = dueDate.getNextElementSibling();
+				System.out.println(assignmentName.asText());
+				DomElement courseName = assignmentName.getNextElementSibling();
+				System.out.println(courseName.asText());
+				
+				curr = curr.getNextElementSibling();
+			}
+			
+			
+			
+			
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		
-		
-								
+
 		BufferedWriter out = threadCode.getWriter();
+			
 		
 		
 		// Closing output
