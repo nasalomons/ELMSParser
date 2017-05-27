@@ -35,7 +35,9 @@ import com.gargoylesoftware.htmlunit.html.HtmlPage;
  * on the Desktop. I used HTMLUnit to navigate the webpage, which is a library I did not create. It was created by
  * Gargoyle Software Inc. More information on this incredibly helpful library can be found here: 
  * http://htmlunit.sourceforge.net/. */
-public class ELMSParser {
+public class ELMSParser {	
+	private static BufferedWriter out;
+	private static BufferedReader in;
 	
 	public static void main(final String[] args) {
 				
@@ -55,7 +57,6 @@ public class ELMSParser {
 		HtmlButton loginButton = null;
 		try {
 			loginPage = webClient.getPage("https://myelms.umd.edu/calendar#view_name=agenda&view_start=2017-05-24");	
-			System.out.println(loginPage.getUrl());
 			forms = loginPage.getForms();	
 			
 			//Getting log in button
@@ -83,7 +84,6 @@ public class ELMSParser {
 	    final HtmlPage intermediate;
 	    try {
 			intermediate = loginButton.click();	
-			System.out.println(intermediate.getUrl());		
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -103,26 +103,22 @@ public class ELMSParser {
 			month = date.substring(0, 2);			
 			day = date.substring(3, 5);			
 			year = date.substring(6, 10);
-			System.out.println("Month: " + month + ", Day: " + day + ", Year: " + year);
 		} catch(NumberFormatException e) {
 			e.printStackTrace();		
 		}
 
 		HtmlPage agenda;
+
 		try {				
 			
 			// Opening the agenda webpage at the date provided
 			agenda = webClient.getPage("https://myelms.umd.edu/calendar#view_name=agenda&view_start=" 
 					+ year + "-" + month + "-" + day);
-			System.out.println(agenda.getUrl());
 			
 			// Navigating to where assignments are stored
 			DomElement temp = agenda.getElementById("content");
-			System.out.println(temp);
 			temp = temp.getLastElementChild().getPreviousElementSibling();
-			System.out.println(temp);
 			temp = temp.getFirstElementChild().getNextElementSibling();
-			System.out.println(temp);
 			// Waiting for the page to load (just in case)
 			while(temp.getChildElementCount() == 0) {
 				try {
@@ -131,56 +127,74 @@ public class ELMSParser {
 					e.printStackTrace();
 				}
 			}
+			// Navigating to where the events are stored
 			temp = temp.getFirstElementChild();
-			System.out.println(temp);
 			temp = temp.getFirstElementChild().getNextElementSibling();
-			System.out.println(temp);
 			DomElement eventList = temp.getFirstElementChild();
-			System.out.println(eventList);
+			
+			// curr will be what is changed to move from element to element
 			DomElement curr = eventList.getFirstElementChild();
-			System.out.println("curr=" + curr);
 			if(curr == null) {
 				System.out.println("No assignments due on " + month + "/" + day + "/" + year);
 			}
-			while(curr != null) {
+			
+			/* Retrieving and cleaning up the due date, assignment name, and course name of each assignment 
+			 * and printing it to the file */
+			StringBuffer line = new StringBuffer("");
+			out.newLine();
+			for(int i = 1; curr != null; i++) {
 				DomElement event = curr.getFirstElementChild();
 				DomElement dueDate = event.getFirstElementChild().getNextElementSibling();
-				System.out.println(dueDate.asText());
 				DomElement assignmentName = dueDate.getNextElementSibling();
-				System.out.println(assignmentName.asText());
 				DomElement courseName = assignmentName.getNextElementSibling();
-				System.out.println(courseName.asText());
 				
+				// Assignment Number
+				line.append(i + ") ");
+				// If the assignment is already done, the user would want to know
+				if(assignmentName.toString().contains("completed")) {
+					line.append("COMPLETED -- ");
+				}
+				// The time always starts at index 6 (it is a little off if it's a calendar event, but overall fine)
+				line.append("Due: " + dueDate.asText().substring(6) + " - ");
+				
+				// Assignment name is always concluded by a space then a comma (if an assignment)
+				if(assignmentName.asText().contains(",")) {
+					line.append(assignmentName.asText().substring(0, assignmentName.asText().indexOf(',')) + "- ");
+				// If it's a calendar event it might not have one
+				} else {
+					line.append(assignmentName.asText() + " - ");
+				}
+				
+				// Course name always is preceded by a comma and is 7 characters
+				line.append(courseName.asText().subSequence(1, 8));
+				
+				// Printing line to the file
+				out.write(line.toString());
+				out.newLine();
+				
+				// Clearing line
+				line.delete(0, line.length());
+				
+				// Next event
 				curr = curr.getNextElementSibling();
 			}
-			
-			
-			
+											
+			// Closing output
+			if(out != null) {
+				out.close();
+			}
 			
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
-
-		BufferedWriter out = threadCode.getWriter();
-			
-		
-		
-		// Closing output
-		if(out != null) {
-			try {
-				out.close();
-			} catch(IOException e) {
-				e.printStackTrace();
-			}
-		}
+				
 		// Closing the WebClient
 		if(webClient != null) {
 			webClient.close();
 		}
+		
 	}
-	
-	
+
 	private static class ThreadCode implements Runnable {
 		private String date = "penis";
 		private BufferedWriter writer;
@@ -188,13 +202,10 @@ public class ELMSParser {
 		@Override
 		public void run() {
 			
-			BufferedReader in = null;
-			BufferedWriter out = null;
 			try {
-				// Getting location of Desktop of the computer and creating agenda file
+				// Getting location of Desktop of the computer and creating agenda file (might be a better way)
 				File desktop = new File(System.getProperty("user.home") + File.separator + "Desktop");
 				File agenda = File.createTempFile("agenda", ".txt", desktop);
-				agenda.deleteOnExit();
 				
 				// Creating BufferedWriter and BufferedReader for agenda
 				try {
@@ -206,7 +217,7 @@ public class ELMSParser {
 			
 				// Printing prompt to agenda
 				String prompt = "Enter a date (MM/DD/YYYY):";
-				out.write(prompt, 0, prompt.length());
+				out.write(prompt);
 				out.flush();
 				
 				// Reading input (Note: file must be saved before program can read it)
@@ -223,7 +234,7 @@ public class ELMSParser {
 						keepReading = false;
 					}
 				}
-				
+						
 				// Closing input (need output for later)
 				if(in != null) {
 					in.close();
@@ -238,14 +249,7 @@ public class ELMSParser {
 		
 		// Method to allow us to retrieve the date in main
 		public String getDate() {
-			System.out.println(date);
 			return date;
 		}
-		
-		// Method to allow us to output in main
-		public BufferedWriter getWriter() {
-			return writer;
-		}
-				
 	}
 }
