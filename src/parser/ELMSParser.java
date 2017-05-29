@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.util.List;
 
 import javax.swing.JOptionPane;
-import javax.swing.plaf.synth.SynthSeparatorUI;
 
 import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.WebClient;
@@ -31,8 +30,12 @@ import com.gargoylesoftware.htmlunit.html.HtmlPage;
  * these assignments, I need to log in and navigate to my agenda, which takes a few clicks to many and that time adds
  * up. Doing it often can be annoying, so I decided to get some Java practice and make this program.
  * 
- * This program opens up ELMS, logs in, retrieves the assignments on a given day, and puts them in a text document
- * on the Desktop. I used HTMLUnit to navigate the webpage, which is a library I did not create. It was created by
+ * The program logs into ELMS and waits. A thread is created which creates a text file on the desktop and prompts
+ * the user to enter a date in the text file. Once the user enters a text file, the thread is terminated and the 
+ * main thread retrieves the date. It navigates to where the assignments for that date are stored and prints each
+ * assignment, due date, and class to the text file.
+ *
+ * I used HTMLUnit to navigate the webpage, which is a library I did not create. It was created by
  * Gargoyle Software Inc. More information on this incredibly helpful library can be found here: 
  * http://htmlunit.sourceforge.net/. */
 public class ELMSParser {	
@@ -73,7 +76,7 @@ public class ELMSParser {
 		usernameIn.setValueAttribute(JOptionPane.showInputDialog("Enter username:"));	
 	    passwordIn.setValueAttribute(JOptionPane.showInputDialog("Enter password:"));	
 										
-		// Logging in and navigating to the Agenda
+		// Logging in
 	    /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
 	     * NOTE: I am not checking to make sure that username and password were correct because the reason I created *
 	     * this program was convenience. Instead of using JOptionPane above, my username and password will be there. *
@@ -81,9 +84,8 @@ public class ELMSParser {
 	     * entries. I am using JOptionPane now because I do not want to give out my username/password on the 		 *
 	     * internet.                                                                                                 *
 	     * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-	    final HtmlPage intermediate;
 	    try {
-			intermediate = loginButton.click();	
+			loginButton.click();	
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -97,20 +99,17 @@ public class ELMSParser {
 		
 		// Retrieving date from thread and parsing it to get the month, day, and year requested
 		String date = threadCode.getDate();
-		
 		String month = null, day = null, year = null;
 		try {
 			month = date.substring(0, 2);			
 			day = date.substring(3, 5);			
 			year = date.substring(6, 10);
-		} catch(NumberFormatException e) {
+		} catch(IndexOutOfBoundsException e) {
 			e.printStackTrace();		
 		}
 
 		HtmlPage agenda;
-
 		try {				
-			
 			// Opening the agenda webpage at the date provided
 			agenda = webClient.getPage("https://myelms.umd.edu/calendar#view_name=agenda&view_start=" 
 					+ year + "-" + month + "-" + day);
@@ -195,22 +194,25 @@ public class ELMSParser {
 		
 	}
 
+	/* This static inner class is used by the thread created by the main thread. The thread will create a text file on
+	 * the desktop and stores the file in the global variable, file. The thread will initialize the in and out 
+	 * global variables with a BufferedReader/Writer to that file. A prompt for the user to enter a date is written to 
+	 * the file. The thread waits until the user enters a date and stores that value in the date variable. 
+	 * The class also includes a method that returns the date to allow main to access that value. */
 	private static class ThreadCode implements Runnable {
-		private String date = "penis";
-		private BufferedWriter writer;
+		private String date = "";
 		
 		@Override
-		public void run() {
-			
+		public void run() {			
 			try {
 				// Getting location of Desktop of the computer and creating agenda file (might be a better way)
 				File desktop = new File(System.getProperty("user.home") + File.separator + "Desktop");
-				File agenda = File.createTempFile("agenda", ".txt", desktop);
+				File file = File.createTempFile("agenda", ".txt", desktop);
 				
 				// Creating BufferedWriter and BufferedReader for agenda
 				try {
-					in = new BufferedReader(new FileReader(agenda));
-					out = new BufferedWriter(new FileWriter(agenda, true));
+					in = new BufferedReader(new FileReader(file));
+					out = new BufferedWriter(new FileWriter(file, true));
 				} catch(FileNotFoundException e) {
 					e.printStackTrace();
 				}
@@ -224,7 +226,7 @@ public class ELMSParser {
 				boolean keepReading = true;
 				in.readLine();
 				while(keepReading) {
-					if((date = in.readLine()) == null || (date.equals(""))) {
+					if((date = in.readLine()) == null || date.equals("")) {
 						try {
 							Thread.sleep(7000);
 						} catch (InterruptedException e) {
@@ -242,12 +244,10 @@ public class ELMSParser {
 			
 			} catch (IOException e) {
 				e.printStackTrace();
-			}
-			
-			
+			}			
 		}
 		
-		// Method to allow us to retrieve the date in main
+		// Returns the data provided by the user
 		public String getDate() {
 			return date;
 		}
