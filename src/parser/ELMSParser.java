@@ -53,6 +53,8 @@ public class ELMSParser {
 		thread.start();	
 	 
 		final WebClient webClient = new WebClient(BrowserVersion.CHROME);
+		webClient.getOptions().setThrowExceptionOnScriptError(false);
+
 	        	        
 		// Opening login page
 		final HtmlPage loginPage;
@@ -185,6 +187,16 @@ public class ELMSParser {
 			
 		} catch (IOException e) {
 			e.printStackTrace();
+		} catch (NullPointerException e) {
+			try {
+				out.write("No assignments on date: " + month + "/" + day + "/" + year + ".");
+				out.newLine();
+				if(out!=null) {
+					out.close();
+				}
+			} catch (IOException f) {
+				e.printStackTrace();
+			}
 		}
 				
 		// Closing the WebClient
