@@ -7,18 +7,21 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-
+import java.util.Calendar;
 import java.util.List;
 
 import javax.swing.JOptionPane;
 
+import com.gargoylesoftware.htmlunit.AjaxController;
 import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.WebClient;
+import com.gargoylesoftware.htmlunit.WebRequest;
 import com.gargoylesoftware.htmlunit.html.DomElement;
 import com.gargoylesoftware.htmlunit.html.HtmlButton;
 import com.gargoylesoftware.htmlunit.html.HtmlForm;
 import com.gargoylesoftware.htmlunit.html.HtmlInput;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import com.gargoylesoftware.htmlunit.javascript.background.JavaScriptJobManager;
 
 
 /* This program was designed to help me practice as well as convenience accessing the list of school assignments that I 
@@ -53,30 +56,30 @@ public class ELMSParser {
 		thread.start();	
 	 
 		final WebClient webClient = new WebClient(BrowserVersion.CHROME);
+		webClient.getOptions().setJavaScriptEnabled(true);
 		webClient.getOptions().setThrowExceptionOnScriptError(false);
-
 	        	        
 		// Opening login page
 		final HtmlPage loginPage;
-		List<HtmlForm> forms = null;
 		HtmlButton loginButton = null;
 		try {
-			loginPage = webClient.getPage("https://myelms.umd.edu/calendar#view_name=agenda&view_start=2017-05-24");	
-			forms = loginPage.getForms();	
+			loginPage = webClient.getPage("https://myelms.umd.edu/calendar#view_name=agenda&view_start=2017-08-24");	
 			
 			//Getting log in button
-			loginButton = (HtmlButton) loginPage.getElementsByTagName("button").get(0);
+			loginButton = (HtmlButton) loginPage.getElementByName("_eventId_proceed");
+			// Getting username and password forms			
+			HtmlInput usernameIn = (HtmlInput)loginPage.getElementById("username");							
+			HtmlInput passwordIn = (HtmlInput)loginPage.getElementById("password");			
+													
+			// Setting username and password - WILL BE CONSTANT IN MY USAGE	(instead of using JOptionPane)			
+			usernameIn.setValueAttribute(JOptionPane.showInputDialog("Enter username:"));	
+		    passwordIn.setValueAttribute(JOptionPane.showInputDialog("Enter password:"));	
+		    
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		
-		// Getting username and password forms			
-		HtmlInput usernameIn = forms.get(0).getInputByName("pseudonym_session[unique_id]");								
-		HtmlInput passwordIn = forms.get(0).getInputByName("pseudonym_session[password]");				
-												
-		// Setting username and password - WILL BE CONSTANT IN MY USAGE	(instead of using JOptionPane)			
-		usernameIn.setValueAttribute(JOptionPane.showInputDialog("Enter username:"));	
-	    passwordIn.setValueAttribute(JOptionPane.showInputDialog("Enter password:"));	
+		
 										
 		// Logging in
 	    /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
@@ -109,15 +112,27 @@ public class ELMSParser {
 		} catch(IndexOutOfBoundsException e) {
 			e.printStackTrace();		
 		}
+		
+		
 
 		HtmlPage agenda;
 		try {				
+			Calendar today = Calendar.getInstance();
+			Calendar in = Calendar.getInstance();
+			in.set(Integer.valueOf(year), Integer.valueOf(month), Integer.valueOf(day));
+			if(today.before(in)) {
+				webClient.close();
+				throw new NullPointerException();
+			}
+			
 			// Opening the agenda webpage at the date provided
 			agenda = webClient.getPage("https://myelms.umd.edu/calendar#view_name=agenda&view_start=" 
 					+ year + "-" + month + "-" + day);
+
 			
 			// Navigating to where assignments are stored
 			DomElement temp = agenda.getElementById("content");
+			
 			temp = temp.getLastElementChild().getPreviousElementSibling();
 			temp = temp.getFirstElementChild().getNextElementSibling();
 			// Waiting for the page to load (just in case)
@@ -128,6 +143,7 @@ public class ELMSParser {
 					e.printStackTrace();
 				}
 			}
+
 			// Navigating to where the events are stored
 			temp = temp.getFirstElementChild();
 			temp = temp.getFirstElementChild().getNextElementSibling();
@@ -135,9 +151,6 @@ public class ELMSParser {
 			
 			// curr will be what is changed to move from element to element
 			DomElement curr = eventList.getFirstElementChild();
-			if(curr == null) {
-				System.out.println("No assignments due on " + month + "/" + day + "/" + year);
-			}
 			
 			/* Retrieving and cleaning up the due date, assignment name, and course name of each assignment 
 			 * and printing it to the file */
@@ -187,10 +200,14 @@ public class ELMSParser {
 			
 		} catch (IOException e) {
 			e.printStackTrace();
+			
+		// Happens when there is no assignments on a date
 		} catch (NullPointerException e) {
 			try {
 				out.write("No assignments on date: " + month + "/" + day + "/" + year + ".");
 				out.newLine();
+				
+				// Closing output
 				if(out!=null) {
 					out.close();
 				}
@@ -240,7 +257,7 @@ public class ELMSParser {
 				while(keepReading) {
 					if((date = in.readLine()) == null || date.equals("")) {
 						try {
-							Thread.sleep(7000);
+							Thread.sleep(10000);
 						} catch (InterruptedException e) {
 							e.printStackTrace();
 						}
